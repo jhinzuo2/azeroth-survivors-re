@@ -72,13 +72,31 @@ pub fn wow_data() -> Option<PathBuf> {
 
 /// Every place [`wow_data`] looks, in order, whether or not it exists, for a "looked in" message.
 pub fn candidates() -> Vec<PathBuf> {
-    candidates_from(
-        std::env::var_os("WOW_DATA").map(PathBuf::from),
+    let override_dir = std::env::var_os("WOW_DATA").map(PathBuf::from);
+    let empty_override = override_dir
+        .as_ref()
+        .is_some_and(|p| p.as_os_str().is_empty());
+    let mut out = candidates_from(
+        override_dir,
         project_folder(),
         std::env::current_exe()
             .ok()
             .and_then(|e| e.parent().map(Path::to_path_buf)),
-    )
+    );
+    // iOS: the app bundle is read-only, so the install lives in the app's Documents folder, which
+    // the Files app shows. `$HOME` is the app's container there. An empty `$WOW_DATA` already
+    // means no install, so it adds nothing.
+    #[cfg(target_os = "ios")]
+    if !empty_override {
+        if let Some(home) = std::env::var_os("HOME") {
+            let docs = PathBuf::from(home).join("Documents");
+            out.push(docs.join("Data"));
+            out.push(docs.join("WoW/Data"));
+        }
+    }
+    #[cfg(not(target_os = "ios"))]
+    let _ = empty_override;
+    out
 }
 
 /// [`candidates`] with the environment passed in: a test that set `$WOW_DATA` would change the
