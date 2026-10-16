@@ -1,0 +1,72 @@
+# Azeroth Survivors: the .ipa. The staticlib job compiles the game on Linux; the package job links
+# it on macOS. Run from the Actions tab, or push to the ios-build branch.
+name: ios-ipa
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version shown on the app, e.g. 0.1.0"
+        type: string
+        default: "0.1.0"
+  push:
+    branches: [ios-build]
+
+concurrency:
+  group: ios-ipa-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: "0"
+  IPHONEOS_DEPLOYMENT_TARGET: "17.0"
+
+jobs:
+  staticlib:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - name: Toolchain
+        run: |
+          rustup toolchain install --profile minimal
+          rustup target add aarch64-apple-ios
+      - name: System packages
+        run: sudo apt-get update -q && sudo apt-get install -yq clang lld llvm jq
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: survivors-ios
+          cache-targets: true
+          cache-on-failure: true
+      - name: Build libsurvivors_ios.a
+        run: bash ios/build-staticlib.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: survivors-ios-staticlib
+          path: |
+            target/survivors-ios-out/libsurvivors_ios.a
+            target/survivors-ios-out/lib/
+            target/survivors-ios-out/native-libs.txt
+          retention-days: 1
+
+  package:
+    needs: staticlib
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: survivors-ios-staticlib
+          path: target/survivors-ios-out
+      - name: Package AzerothSurvivors.ipa
+        env:
+          SURVIVORS_BUILD: ${{ github.run_number }}
+          SURVIVORS_VERSION: ${{ inputs.version || '0.1.0' }}
+        run: bash ios/package-ipa.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: AzerothSurvivors-ipa
+          path: target/survivors-ios-out/AzerothSurvivors.ipa
+          retention-days: 14
+          compression-level: 0
