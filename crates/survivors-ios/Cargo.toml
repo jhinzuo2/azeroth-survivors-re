@@ -1,0 +1,20 @@
+[package]
+name = "survivors-ios"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Azeroth Survivors on iOS: a static library exporting `survivors_main`, which the iOS app's main calls"
+
+[lints]
+workspace = true
+
+[lib]
+# `staticlib` is what the iOS link consumes; building it needs no linker, so the whole Rust build
+# runs on Linux. `rlib` keeps `cargo check` and tests working.
+crate-type = ["staticlib", "rlib"]
+
+[dependencies]
+benilla-app = { path = "../benilla-app", default-features = false }
+
+[build-dependencies]
+benilla-buildstamp = { path = "../benilla-buildstamp" }

@@ -1,0 +1,46 @@
+# Azeroth Survivors, iOS step 1: does the game compile for aarch64-apple-ios?
+# Runs on Linux, which is cheap. Packaging an .ipa (macOS) is a later step.
+name: ios-staticlib
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ios-build]
+
+concurrency:
+  group: ios-staticlib-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: "0"
+  IPHONEOS_DEPLOYMENT_TARGET: "17.0"
+
+jobs:
+  staticlib:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - name: Toolchain
+        run: |
+          rustup toolchain install --profile minimal
+          rustup target add aarch64-apple-ios
+      - name: System packages
+        run: sudo apt-get update -q && sudo apt-get install -yq clang lld llvm jq
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: survivors-ios
+          cache-targets: true
+          cache-on-failure: true
+      - name: Build libsurvivors_ios.a
+        # Run through bash: no executable bit is needed on the script.
+        run: bash ios/build-staticlib.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: survivors-ios-staticlib
+          path: |
+            target/survivors-ios-out/libsurvivors_ios.a
+            target/survivors-ios-out/lib/
+            target/survivors-ios-out/native-libs.txt
+          retention-days: 3
